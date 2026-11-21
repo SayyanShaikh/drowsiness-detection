@@ -1,0 +1,9 @@
+# dlib landmark model (~100 MB) - download it, see README
+*.dat
+*.dat.bz2
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
