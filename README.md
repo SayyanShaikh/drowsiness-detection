@@ -2,6 +2,10 @@
 
 A real-time drowsiness detector that watches a person through a webcam and gives a spoken warning when they show signs of falling asleep.
 
+| Eyes closed too long | Yawn |
+|:---:|:---:|
+| ![Alert after eyes stay closed](docs/demo_eyes_closed.jpg) | ![Yawn detected](docs/demo_yawn.jpg) |
+
 It tracks 68 points on the face and checks three signs:
 
 | Sign | How it is measured | What triggers it |
