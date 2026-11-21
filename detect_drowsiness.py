@@ -164,13 +164,17 @@ class DrowsinessDetector:
                     (_, rot_vec, trans_vec) = cv2.solvePnP(self.model_points, image_points, camera_matrix, dist_coeffs)
                     rmat, _ = cv2.Rodrigues(rot_vec)
                     pitch = cv2.decomposeProjectionMatrix(np.hstack((rmat, trans_vec)))[6].flatten()[0]
+                    # The 3D model's y-axis points up but image y points down, so a face looking
+                    # straight at the camera comes out near +/-180 deg. Shift it so 0 = facing the
+                    # camera and positive = head tilted down.
+                    pitch = pitch - 180 if pitch > 0 else pitch + 180
 
                     # Visual Overlays
                     for eye in [leftEye, rightEye]:
                         cv2.drawContours(frame, [cv2.convexHull(eye)], -1, (0, 255, 0), 1)
 
                     # Trigger Logic
-                    if ear < self.eye_thresh or pitch < -self.args["pitch_thresh"]:
+                    if ear < self.eye_thresh or pitch > self.args["pitch_thresh"]:
                         self.counter += 1
                         if self.counter >= self.args["consec_frames"]:
                             cv2.putText(frame, "DANGER: WAKE UP!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
