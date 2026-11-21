@@ -12,7 +12,32 @@ It tracks 68 points on the face and checks three signs:
 
 **Per-person calibration:** for the first 50 frames the person looks at the camera normally. The program records their open-eye EAR and sets the closed-eye threshold to 75% of that average, so it adapts to different eye shapes instead of using one fixed number.
 
-When an alert fires, the screen shows **"DANGER: WAKE UP!"** and a voice says *"Attention. Please stay alert."* (at most once every 10 seconds).
+When an alert fires, the screen shows **"DANGER: WAKE UP!"** and a voice says *"Attention. Please stay alert."* (at most once every 10 seconds). The voice runs in a background thread, so the video does not freeze while it speaks.
+
+Built as the mini project of an AI/ML internship at Inventeron Technologies and Business Solutions LLP, Bengaluru (Sep–Dec 2025), during the M.Tech (CSE) programme at KLE Institute of Technology, Hubballi.
+
+## Performance (on a laptop webcam)
+
+| Measure | Result |
+|---------|--------|
+| Frame rate | 12–20 FPS |
+| Alert delay, eyes closed / head nod | under 1 second |
+| Alert delay, yawn | just over 1 second |
+| CPU use | 30–70% |
+| Memory | under 300 MB |
+
+## Known limits
+
+- Low light, strong backlight, sunglasses or a hand near the face make the landmarks unreliable.
+- Talking or big facial expressions can look like a yawn for a moment. The 20-frame rule removes most of these, but not all.
+- Head-nod detection needs the camera roughly at eye level, for example above the dashboard.
+- A single camera cannot tell drowsiness apart from, say, looking down at a phone.
+
+## Next steps
+
+- A small neural network for landmarks that copes better with poor light.
+- Combine the camera with vehicle signals such as steering movement and lane keeping.
+- Collect a labelled driving dataset and publish evaluation scripts.
 
 ## Setup
 
