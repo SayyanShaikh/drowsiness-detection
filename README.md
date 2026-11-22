@@ -1,5 +1,7 @@
 # Driver Drowsiness Detection
 
+[![tests](https://github.com/SayyanShaikh/drowsiness-detection/actions/workflows/tests.yml/badge.svg)](https://github.com/SayyanShaikh/drowsiness-detection/actions/workflows/tests.yml)
+
 A real-time drowsiness detector that watches a person through a webcam and gives a spoken warning when they show signs of falling asleep.
 
 | Eyes closed too long | Yawn |
