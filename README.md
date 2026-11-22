@@ -85,4 +85,4 @@ The dlib 68-point model was trained on the iBUG 300-W dataset, whose licence doe
 
 ## Author
 
-Sayyan Shaikh – [sayyanshaikh.github.io](https://sayyanshaikh.github.io/)
+Sayyan Shaikh – [GitHub](https://github.com/SayyanShaikh) · [ORCID](https://orcid.org/0009-0005-7107-8838)
