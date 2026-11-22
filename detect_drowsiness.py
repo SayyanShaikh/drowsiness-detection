@@ -84,6 +84,7 @@ class DrowsinessDetector:
         self.alerts = None  # created once calibration has set the eye threshold
         self.cam_matrix = None
         self.last_alarm_time = 0.0
+        self.voice_ok = True
 
         # --- Load Models ---
         if detector is None or predictor is None:
@@ -119,18 +120,27 @@ class DrowsinessDetector:
         return dlib.shape_predictor(path)
 
     def play_alert(self, message):
-        """Triggers the TTS engine in a background thread."""
-        def speak():
+        """Log the alert and speak it in a background thread (at most once per cooldown)."""
+        if (time.time() - self.last_alarm_time) <= self.args["alarm_cooldown"]:
+            return
+        self.last_alarm_time = time.time()
+        logging.warning(f"ALERT: {message}")
+        if self.args.get("no_voice") or not self.voice_ok:
+            print("\a", end="", flush=True)  # terminal bell as a fallback sound
+            return
+        threading.Thread(target=self._speak, args=(message,), daemon=True).start()
+
+    def _speak(self, message):
+        try:
             pyttsx3 = require("pyttsx3", "Run: pip install pyttsx3")
             engine = pyttsx3.init()
             engine.setProperty('rate', 145)
             engine.say(message)
             engine.runAndWait()
-
-        # Only trigger if cooldown period has passed
-        if (time.time() - self.last_alarm_time) > self.args["alarm_cooldown"]:
-            self.last_alarm_time = time.time()
-            threading.Thread(target=speak, daemon=True).start()
+        except Exception as exc:  # missing library or no speech engine on this system
+            self.voice_ok = False
+            print("\a", end="", flush=True)  # still make a sound for this alert
+            logging.warning(f"Voice alert unavailable ({exc}). Using on-screen, log and beep alerts.")
 
     def process_frame(self, frame):
         """Analyse one BGR frame. Returns (frame with overlays drawn, FrameStatus)."""
@@ -256,6 +266,7 @@ def parse_args(argv=None):
     ap.add_argument("--no-window", action="store_true", help="Do not open a preview window")
     ap.add_argument("--calibration-frames", type=int, default=50)
     ap.add_argument("--alarm-cooldown", type=int, default=10)
+    ap.add_argument("--no-voice", action="store_true", help="Show and log alerts without speaking them")
     ap.add_argument("--mouth-thresh", type=float, default=0.6)
     ap.add_argument("--yawn-frames", type=int, default=15,
                     help="Frames in a row with the mouth wide open before a yawn is reported")
