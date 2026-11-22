@@ -77,7 +77,7 @@ Press **q** to quit.
 
 ## Libraries used
 
-dlib (face detection and landmarks), OpenCV (video, head pose), imutils, SciPy, NumPy, pyttsx3 (offline text-to-speech).
+dlib (face detection and landmarks), OpenCV (video, head pose), imutils, NumPy, pyttsx3 (offline text-to-speech).
 
 ## Note on the landmark model
 
