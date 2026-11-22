@@ -13,6 +13,7 @@ class FrameStatus:
 
     drowsy: bool = False  # eyes closed or head down for long enough -> voice alert
     yawn: bool = False
+    face_lost: bool = False  # no face found for long enough -> voice alert
 
 
 class EarCalibrator:
@@ -44,17 +45,21 @@ class EarCalibrator:
 class AlertState:
     """Counts consecutive warning frames and reports when an alert is due."""
 
-    def __init__(self, eye_thresh, pitch_thresh=15.0, consec_frames=20, mouth_thresh=0.6, yawn_frames=15):
+    def __init__(self, eye_thresh, pitch_thresh=15.0, consec_frames=20, mouth_thresh=0.6, yawn_frames=15,
+                 lost_frames=40):
         self.eye_thresh = eye_thresh
         self.pitch_thresh = pitch_thresh
         self.consec_frames = consec_frames
         self.mouth_thresh = mouth_thresh
         self.yawn_frames = yawn_frames
+        self.lost_frames = lost_frames
         self.counter = 0
         self.yawn_counter = 0
+        self.lost_counter = 0
 
     def update(self, ear, pitch, mar):
         """Feed one frame's measurements; returns the FrameStatus for that frame."""
+        self.lost_counter = 0
         if ear < self.eye_thresh or pitch > self.pitch_thresh:
             self.counter += 1
         else:
@@ -63,3 +68,12 @@ class AlertState:
         self.yawn_counter = self.yawn_counter + 1 if mar > self.mouth_thresh else 0
         return FrameStatus(drowsy=self.counter >= self.consec_frames,
                            yawn=self.yawn_counter >= self.yawn_frames)
+
+    def update_no_face(self):
+        """Feed a frame in which no face was found.
+
+        A head that has dropped or turned far away is no longer detected as a face,
+        so a long run of such frames is treated as a warning sign too.
+        """
+        self.lost_counter += 1
+        return FrameStatus(face_lost=self.lost_counter >= self.lost_frames)

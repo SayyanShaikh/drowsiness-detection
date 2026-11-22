@@ -102,7 +102,14 @@ class DrowsinessDetector:
             self.cam_matrix = camera_matrix(w, h)
 
         status = FrameStatus()
-        for rect in self.detector(gray, 0):
+        rects = self.detector(gray, 0)
+        if len(rects) == 0 and self.alerts is not None:
+            status = self.alerts.update_no_face()
+            if status.face_lost:
+                cv2.putText(frame, "FACE NOT VISIBLE!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                self.play_alert("Face not visible. Please stay alert.")
+
+        for rect in rects:
             shape = face_utils.shape_to_np(self.predictor(gray, rect))
 
             # 1. EAR Logic
@@ -122,6 +129,7 @@ class DrowsinessDetector:
                         consec_frames=self.args["consec_frames"],
                         mouth_thresh=self.args["mouth_thresh"],
                         yawn_frames=self.args["yawn_frames"],
+                        lost_frames=self.args["lost_frames"],
                     )
                     logging.info(f"Calibration finished. Threshold set to: {self.calibrator.threshold:.2f}")
                 continue
@@ -180,6 +188,8 @@ def parse_args(argv=None):
                     help="Frames in a row with the mouth wide open before a yawn is reported")
     ap.add_argument("--pitch-thresh", type=float, default=15)
     ap.add_argument("--consec-frames", type=int, default=20)
+    ap.add_argument("--lost-frames", type=int, default=40,
+                    help="Frames in a row with no face found (after calibration) before an alert")
     return vars(ap.parse_args(argv))
 
 

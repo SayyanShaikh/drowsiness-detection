@@ -65,3 +65,17 @@ def test_yawn_reported_after_mouth_stays_open():
     run_frames(det, faces, 5, synthetic_landmarks())
     statuses = run_frames(det, faces, 3, synthetic_landmarks(mouth_open=110))
     assert [s.yawn for s in statuses] == [False, False, True]
+
+
+def test_alert_when_face_disappears_after_calibration():
+    det, faces = make_detector(lost_frames=3)
+    run_frames(det, faces, 5, synthetic_landmarks())
+    statuses = run_frames(det, faces, 3, None)  # head slumped out of view
+    assert [s.face_lost for s in statuses] == [False, False, True]
+    assert det.spoken == ["Face not visible. Please stay alert."]
+
+
+def test_no_face_before_calibration_is_not_an_alert():
+    det, faces = make_detector(lost_frames=3)
+    statuses = run_frames(det, faces, 10, None)
+    assert not any(s.face_lost for s in statuses) and det.spoken == []
