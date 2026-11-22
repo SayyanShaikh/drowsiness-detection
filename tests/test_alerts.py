@@ -47,3 +47,16 @@ def test_brief_mouth_opening_while_talking_is_not_a_yawn():
     state = AlertState(eye_thresh=0.2, mouth_thresh=0.6, yawn_frames=5)
     talking = [0.7, 0.3, 0.75, 0.4, 0.8, 0.2, 0.7, 0.7, 0.3]
     assert not any(state.update(OPEN, 0, m).yawn for m in talking)
+
+
+def test_face_missing_for_long_enough_raises_alert():
+    state = AlertState(eye_thresh=0.2, lost_frames=3)
+    assert [state.update_no_face().face_lost for _ in range(3)] == [False, False, True]
+
+
+def test_face_coming_back_resets_the_missing_count():
+    state = AlertState(eye_thresh=0.2, lost_frames=3)
+    state.update_no_face()
+    state.update_no_face()
+    state.update(OPEN, 0, 0.2)
+    assert not state.update_no_face().face_lost
