@@ -115,8 +115,7 @@ class NoFrames:
 def test_missing_camera_stops_with_clear_message(monkeypatch):
     monkeypatch.setattr(detect_drowsiness, "VideoStream", NoFrames)
     monkeypatch.setattr(detect_drowsiness.time, "sleep", lambda s: None)
-    monkeypatch.setattr(detect_drowsiness.cv2, "destroyAllWindows", lambda: None)
-    det, _ = make_detector()
+    det, _ = make_detector(no_window=True)
     with pytest.raises(RuntimeError, match="No video from camera 0"):
         det.run()
 
@@ -128,3 +127,29 @@ def test_main_turns_errors_into_a_short_message(monkeypatch):
     monkeypatch.setattr(detect_drowsiness.DrowsinessDetector, "run", boom)
     with pytest.raises(SystemExit, match="Error: No video from camera 3."):
         detect_drowsiness.main([])
+
+
+def write_video(path, n_frames):
+    import cv2
+    out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 15, (600, 450))
+    for i in range(n_frames):
+        frame = blank_frame()
+        frame[:, :, 1] = i  # make frames differ a little
+        out.write(frame)
+    out.release()
+
+
+def test_runs_on_a_video_file_and_stops_at_the_end(tmp_path):
+    video = tmp_path / "drive.avi"
+    write_video(video, 30)
+    det, faces = make_detector(video=str(video), no_window=True)
+    faces.faces = [synthetic_landmarks()]
+    det.run()
+    assert det.frames_processed == 30
+    assert det.calibrator.done
+
+
+def test_unreadable_video_file_gives_clear_error(tmp_path):
+    det, _ = make_detector(video=str(tmp_path / "missing.mp4"), no_window=True)
+    with pytest.raises(FileNotFoundError, match="Cannot open video file"):
+        det.run()

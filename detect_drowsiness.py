@@ -31,6 +31,29 @@ def require(module_name, install_hint):
         raise ImportError(f"'{module_name}' is not installed. {install_hint}") from exc
 
 
+class FileStream:
+    """Frames from a video file, with the same start/read/stop methods as imutils' VideoStream."""
+
+    def __init__(self, path):
+        self.cap = cv2.VideoCapture(path)
+        if not self.cap.isOpened():
+            raise FileNotFoundError(f"Cannot open video file: {path}")
+        self.finished = False
+
+    def start(self):
+        return self
+
+    def read(self):
+        ok, frame = self.cap.read()
+        if not ok:
+            self.finished = True
+            return None
+        return frame
+
+    def stop(self):
+        self.cap.release()
+
+
 class DrowsinessDetector:
     MAX_EMPTY_READS = 50  # about 5 seconds without a frame -> give up with a clear message
 
@@ -164,15 +187,24 @@ class DrowsinessDetector:
 
     def run(self):
         """Main processing loop."""
-        logging.info("Starting Video Stream...")
-        vs = VideoStream(src=self.args["camera"]).start()
-        time.sleep(2.0)
+        if self.args.get("video"):
+            logging.info(f"Reading video file: {self.args['video']}")
+            vs = FileStream(self.args["video"]).start()
+        else:
+            logging.info("Starting Video Stream...")
+            vs = VideoStream(src=self.args["camera"]).start()
+            time.sleep(2.0)  # let the camera warm up
 
+        show_window = not self.args.get("no_window", False)
+        self.frames_processed = 0
         empty_reads = 0
         try:
             while True:
                 frame = vs.read()
                 if frame is None:
+                    if getattr(vs, "finished", False):
+                        logging.info(f"End of video after {self.frames_processed} frames.")
+                        break
                     empty_reads += 1
                     if empty_reads >= self.MAX_EMPTY_READS:
                         raise RuntimeError(
@@ -183,11 +215,14 @@ class DrowsinessDetector:
                 empty_reads = 0
 
                 frame, _ = self.process_frame(frame)
-                cv2.imshow("Safety System", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+                self.frames_processed += 1
+                if show_window:
+                    cv2.imshow("Safety System", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
         finally:
-            cv2.destroyAllWindows()
+            if show_window:
+                cv2.destroyAllWindows()
             vs.stop()
 
 
@@ -195,6 +230,8 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("-p", "--shape-predictor", help="Path to landmark predictor")
     ap.add_argument("-c", "--camera", type=int, default=0, help="Webcam index")
+    ap.add_argument("-v", "--video", help="Analyse a recorded video file instead of the webcam")
+    ap.add_argument("--no-window", action="store_true", help="Do not open a preview window")
     ap.add_argument("--calibration-frames", type=int, default=50)
     ap.add_argument("--alarm-cooldown", type=int, default=10)
     ap.add_argument("--mouth-thresh", type=float, default=0.6)
