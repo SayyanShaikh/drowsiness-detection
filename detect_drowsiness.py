@@ -8,10 +8,9 @@ When threshold conditions are met it triggers a text-to-speech alert.
 """
 
 import argparse
+import importlib
 import time
-import dlib
 import cv2
-import pyttsx3
 import imutils
 import threading
 import logging
@@ -22,8 +21,18 @@ from imutils import face_utils
 
 from metrics import camera_matrix, eye_aspect_ratio, head_pitch, mouth_aspect_ratio
 
+def require(module_name, install_hint):
+    """Import an optional heavy dependency, with a clear message if it is missing."""
+    try:
+        return importlib.import_module(module_name)
+    except ImportError as exc:
+        raise ImportError(f"'{module_name}' is not installed. {install_hint}") from exc
+
+
 class DrowsinessDetector:
-    def __init__(self, args):
+    def __init__(self, args, detector=None, predictor=None):
+        """`detector` and `predictor` can be passed in (e.g. fakes in tests);
+        by default dlib's face detector and the 68-landmark model are loaded."""
         self.args = args
         self.initialize_logging()
         
@@ -38,8 +47,12 @@ class DrowsinessDetector:
         self.calibration_done = False
         
         # --- Load Models ---
-        self.detector = dlib.get_frontal_face_detector()
-        self.predictor = self.load_predictor()
+        if detector is None or predictor is None:
+            dlib = require("dlib", "Run: pip install dlib  (see README for Windows notes)")
+            self.detector = detector or dlib.get_frontal_face_detector()
+            self.predictor = predictor or self.load_predictor(dlib)
+        else:
+            self.detector, self.predictor = detector, predictor
         
         # --- Landmark Indices ---
         (self.lStart, self.lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
@@ -49,7 +62,7 @@ class DrowsinessDetector:
     def initialize_logging(self):
         logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
-    def load_predictor(self):
+    def load_predictor(self, dlib):
         """Attempts to find and load the dlib facial landmark predictor."""
         path = self.args["shape_predictor"]
         if not path:
@@ -69,6 +82,7 @@ class DrowsinessDetector:
     def play_alert(self, message):
         """Triggers the TTS engine in a background thread."""
         def speak():
+            pyttsx3 = require("pyttsx3", "Run: pip install pyttsx3")
             engine = pyttsx3.init()
             engine.setProperty('rate', 145)
             engine.say(message)
