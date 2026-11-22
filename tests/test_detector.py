@@ -16,10 +16,10 @@ def make_detector(**overrides):
     return det, faces
 
 
-def run_frames(det, faces, n, landmarks):
+def run_frames(det, faces, n, landmarks, others=()):
     statuses = []
     for _ in range(n):
-        faces.faces = [] if landmarks is None else [landmarks]
+        faces.faces = ([] if landmarks is None else [landmarks]) + list(others)
         _, status = det.process_frame(blank_frame())
         statuses.append(status)
     return statuses
@@ -79,3 +79,18 @@ def test_no_face_before_calibration_is_not_an_alert():
     det, faces = make_detector(lost_frames=3)
     statuses = run_frames(det, faces, 10, None)
     assert not any(s.face_lost for s in statuses) and det.spoken == []
+
+
+def test_passenger_with_open_eyes_does_not_hide_sleeping_driver():
+    det, faces = make_detector()
+    passenger = synthetic_landmarks(eye_open=10, scale=0.5, offset=(220, 40))  # smaller face, further away
+    run_frames(det, faces, 5, synthetic_landmarks(eye_open=10), others=[passenger])
+    statuses = run_frames(det, faces, 4, synthetic_landmarks(eye_open=0), others=[passenger])
+    assert statuses[-1].drowsy
+
+
+def test_calibration_counts_one_face_per_frame():
+    det, faces = make_detector()
+    passenger = synthetic_landmarks(scale=0.5, offset=(220, 40))
+    run_frames(det, faces, 3, synthetic_landmarks(), others=[passenger])
+    assert len(det.calibrator.values) == 3
