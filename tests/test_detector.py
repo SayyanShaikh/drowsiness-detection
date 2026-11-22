@@ -3,7 +3,7 @@ import pytest
 from fakes import FakeFaces, blank_frame, synthetic_landmarks
 
 import detect_drowsiness
-from detect_drowsiness import DrowsinessDetector, parse_args, require
+from detect_drowsiness import DrowsinessDetector, FpsMeter, parse_args, require
 
 
 def make_detector(**overrides):
@@ -153,3 +153,20 @@ def test_unreadable_video_file_gives_clear_error(tmp_path):
     det, _ = make_detector(video=str(tmp_path / "missing.mp4"), no_window=True)
     with pytest.raises(FileNotFoundError, match="Cannot open video file"):
         det.run()
+
+
+def test_fps_meter_with_a_steady_clock():
+    ticks = iter([i * 0.05 for i in range(100)])  # one frame every 50 ms
+    meter = FpsMeter(window=10, clock=lambda: next(ticks))
+    values = [meter.tick() for _ in range(25)]
+    assert values[0] == 0.0
+    assert values[-1] == pytest.approx(20.0)
+
+
+def test_fps_is_measured_when_running_a_video(tmp_path):
+    video = tmp_path / "drive.avi"
+    write_video(video, 20)
+    det, faces = make_detector(video=str(video), no_window=True)
+    faces.faces = [synthetic_landmarks()]
+    det.run()
+    assert det.fps > 0

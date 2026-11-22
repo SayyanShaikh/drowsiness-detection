@@ -8,6 +8,7 @@ When threshold conditions are met it triggers a text-to-speech alert.
 """
 
 import argparse
+import collections
 import importlib
 import logging
 import os
@@ -29,6 +30,21 @@ def require(module_name, install_hint):
         return importlib.import_module(module_name)
     except ImportError as exc:
         raise ImportError(f"'{module_name}' is not installed. {install_hint}") from exc
+
+
+class FpsMeter:
+    """Frames per second, smoothed over the last `window` frames."""
+
+    def __init__(self, window=30, clock=time.perf_counter):
+        self.times = collections.deque(maxlen=window)
+        self.clock = clock
+
+    def tick(self):
+        """Call once per frame; returns the current FPS (0 until two frames are seen)."""
+        self.times.append(self.clock())
+        if len(self.times) < 2 or self.times[-1] == self.times[0]:
+            return 0.0
+        return (len(self.times) - 1) / (self.times[-1] - self.times[0])
 
 
 class FileStream:
@@ -197,13 +213,16 @@ class DrowsinessDetector:
 
         show_window = not self.args.get("no_window", False)
         self.frames_processed = 0
+        self.fps = 0.0
+        fps_meter = FpsMeter()
         empty_reads = 0
         try:
             while True:
                 frame = vs.read()
                 if frame is None:
                     if getattr(vs, "finished", False):
-                        logging.info(f"End of video after {self.frames_processed} frames.")
+                        logging.info(f"End of video after {self.frames_processed} frames "
+                                     f"(processed at {self.fps:.1f} FPS).")
                         break
                     empty_reads += 1
                     if empty_reads >= self.MAX_EMPTY_READS:
@@ -216,6 +235,9 @@ class DrowsinessDetector:
 
                 frame, _ = self.process_frame(frame)
                 self.frames_processed += 1
+                self.fps = fps_meter.tick()
+                cv2.putText(frame, f"FPS: {self.fps:.1f}", (frame.shape[1] - 85, frame.shape[0] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
                 if show_window:
                     cv2.imshow("Safety System", frame)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
