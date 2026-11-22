@@ -170,3 +170,40 @@ def test_fps_is_measured_when_running_a_video(tmp_path):
     faces.faces = [synthetic_landmarks()]
     det.run()
     assert det.fps > 0
+
+
+def make_real_alert_detector(**overrides):
+    args = parse_args([])
+    args.update(**overrides)
+    faces = FakeFaces()
+    return DrowsinessDetector(args, detector=faces.detect, predictor=faces.predict)
+
+
+def test_no_voice_logs_alert_without_speaking(monkeypatch, caplog):
+    def no_threads(*a, **k):
+        raise AssertionError("should not start a speech thread")
+    monkeypatch.setattr(detect_drowsiness.threading, "Thread", no_threads)
+    det = make_real_alert_detector(no_voice=True)
+    with caplog.at_level("WARNING"):
+        det.play_alert("Attention. Please stay alert.")
+    assert "ALERT: Attention. Please stay alert." in caplog.text
+
+
+def test_alerts_respect_the_cooldown(caplog):
+    det = make_real_alert_detector(no_voice=True, alarm_cooldown=10)
+    with caplog.at_level("WARNING"):
+        det.play_alert("first")
+        det.play_alert("second")
+    assert "first" in caplog.text and "second" not in caplog.text
+
+
+def test_missing_speech_engine_falls_back_to_log_alerts(monkeypatch, caplog, capsys):
+    def no_pyttsx3(name, hint):
+        raise ImportError(f"'{name}' is not installed. {hint}")
+    monkeypatch.setattr(detect_drowsiness, "require", no_pyttsx3)
+    det = make_real_alert_detector()
+    with caplog.at_level("WARNING"):
+        det._speak("hello")
+    assert det.voice_ok is False
+    assert "Voice alert unavailable" in caplog.text
+    assert "\a" in capsys.readouterr().out  # the failed alert still beeps
