@@ -41,7 +41,7 @@ def synthetic_landmarks(eye_open=10.0, mouth_open=6.0, pitch_deg=0.0, offset=(0.
     shape[49:54] = outer_top
     shape[55:60] = outer_bottom
     shape[60:68] = np.linspace(shape[48], shape[54], 8)     # inner lip (unused)
-    return shape
+    return shape + np.asarray(offset, dtype=float)
 
 
 class _Point:

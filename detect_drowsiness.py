@@ -103,56 +103,60 @@ class DrowsinessDetector:
 
         status = FrameStatus()
         rects = self.detector(gray, 0)
-        if len(rects) == 0 and self.alerts is not None:
-            status = self.alerts.update_no_face()
-            if status.face_lost:
-                cv2.putText(frame, "FACE NOT VISIBLE!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                self.play_alert("Face not visible. Please stay alert.")
+        if len(rects) == 0:
+            if self.alerts is not None:
+                status = self.alerts.update_no_face()
+                if status.face_lost:
+                    cv2.putText(frame, "FACE NOT VISIBLE!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    self.play_alert("Face not visible. Please stay alert.")
+            return frame, status
 
-        for rect in rects:
-            shape = face_utils.shape_to_np(self.predictor(gray, rect))
+        # With several faces in view (e.g. a passenger), follow the largest one:
+        # the driver is the person closest to the camera.
+        rect = max(rects, key=lambda r: r.width() * r.height())
+        shape = face_utils.shape_to_np(self.predictor(gray, rect))
 
-            # 1. EAR Logic
-            left_eye = shape[self.lStart:self.lEnd]
-            right_eye = shape[self.rStart:self.rEnd]
-            ear = (eye_aspect_ratio(left_eye) + eye_aspect_ratio(right_eye)) / 2.0
+        # 1. EAR Logic
+        left_eye = shape[self.lStart:self.lEnd]
+        right_eye = shape[self.rStart:self.rEnd]
+        ear = (eye_aspect_ratio(left_eye) + eye_aspect_ratio(right_eye)) / 2.0
 
-            # Calibration logic
-            if not self.calibrator.done:
-                self.calibrator.add(ear)
-                cv2.putText(frame, f"Calibrating: {len(self.calibrator.values)}/{self.calibrator.n_frames}",
-                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                if self.calibrator.done:
-                    self.alerts = AlertState(
-                        eye_thresh=self.calibrator.threshold,
-                        pitch_thresh=self.args["pitch_thresh"],
-                        consec_frames=self.args["consec_frames"],
-                        mouth_thresh=self.args["mouth_thresh"],
-                        yawn_frames=self.args["yawn_frames"],
-                        lost_frames=self.args["lost_frames"],
-                    )
-                    logging.info(f"Calibration finished. Threshold set to: {self.calibrator.threshold:.2f}")
-                continue
+        # Calibration logic
+        if not self.calibrator.done:
+            self.calibrator.add(ear)
+            cv2.putText(frame, f"Calibrating: {len(self.calibrator.values)}/{self.calibrator.n_frames}",
+                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            if self.calibrator.done:
+                self.alerts = AlertState(
+                    eye_thresh=self.calibrator.threshold,
+                    pitch_thresh=self.args["pitch_thresh"],
+                    consec_frames=self.args["consec_frames"],
+                    mouth_thresh=self.args["mouth_thresh"],
+                    yawn_frames=self.args["yawn_frames"],
+                    lost_frames=self.args["lost_frames"],
+                )
+                logging.info(f"Calibration finished. Threshold set to: {self.calibrator.threshold:.2f}")
+            return frame, status
 
-            # 2. MAR Logic (Yawning) and 3. Head Pose Logic (Nodding)
-            mar = mouth_aspect_ratio(shape[self.mStart:self.mEnd])
-            pitch = head_pitch(shape, self.cam_matrix)
+        # 2. MAR Logic (Yawning) and 3. Head Pose Logic (Nodding)
+        mar = mouth_aspect_ratio(shape[self.mStart:self.mEnd])
+        pitch = head_pitch(shape, self.cam_matrix)
 
-            # Visual Overlays
-            for eye in [left_eye, right_eye]:
-                cv2.drawContours(frame, [cv2.convexHull(eye)], -1, (0, 255, 0), 1)
+        # Visual Overlays
+        for eye in [left_eye, right_eye]:
+            cv2.drawContours(frame, [cv2.convexHull(eye)], -1, (0, 255, 0), 1)
 
-            # Trigger Logic
-            status = self.alerts.update(ear, pitch, mar)
-            if status.drowsy:
-                cv2.putText(frame, "DANGER: WAKE UP!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                self.play_alert("Attention. Please stay alert.")
-            if status.yawn:
-                cv2.putText(frame, "YAWN DETECTED", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        # Trigger Logic
+        status = self.alerts.update(ear, pitch, mar)
+        if status.drowsy:
+            cv2.putText(frame, "DANGER: WAKE UP!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            self.play_alert("Attention. Please stay alert.")
+        if status.yawn:
+            cv2.putText(frame, "YAWN DETECTED", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-            # On-screen Telemetry
-            cv2.putText(frame, f"EAR: {ear:.2f} | Pitch: {pitch:.1f}", (10, frame.shape[0] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        # On-screen Telemetry
+        cv2.putText(frame, f"EAR: {ear:.2f} | Pitch: {pitch:.1f}", (10, frame.shape[0] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
         return frame, status
 
