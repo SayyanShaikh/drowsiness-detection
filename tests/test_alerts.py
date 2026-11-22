@@ -37,7 +37,13 @@ def test_head_down_counts_like_closed_eyes():
     assert not AlertState(eye_thresh=0.2, pitch_thresh=15, consec_frames=3).update(OPEN, 10, 0.2).drowsy
 
 
-def test_yawn_flag_follows_mouth_threshold():
-    state = AlertState(eye_thresh=0.2, mouth_thresh=0.6)
-    assert state.update(OPEN, 0, 0.7).yawn
-    assert not state.update(OPEN, 0, 0.5).yawn
+def test_yawn_needs_the_mouth_open_for_several_frames():
+    state = AlertState(eye_thresh=0.2, mouth_thresh=0.6, yawn_frames=5)
+    assert [s.yawn for s in feed(state, 5, mar=0.7)] == [False, False, False, False, True]
+    assert not state.update(OPEN, 0, 0.5).yawn  # mouth closed again
+
+
+def test_brief_mouth_opening_while_talking_is_not_a_yawn():
+    state = AlertState(eye_thresh=0.2, mouth_thresh=0.6, yawn_frames=5)
+    talking = [0.7, 0.3, 0.75, 0.4, 0.8, 0.2, 0.7, 0.7, 0.3]
+    assert not any(state.update(OPEN, 0, m).yawn for m in talking)

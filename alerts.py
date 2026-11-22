@@ -44,12 +44,14 @@ class EarCalibrator:
 class AlertState:
     """Counts consecutive warning frames and reports when an alert is due."""
 
-    def __init__(self, eye_thresh, pitch_thresh=15.0, consec_frames=20, mouth_thresh=0.6):
+    def __init__(self, eye_thresh, pitch_thresh=15.0, consec_frames=20, mouth_thresh=0.6, yawn_frames=15):
         self.eye_thresh = eye_thresh
         self.pitch_thresh = pitch_thresh
         self.consec_frames = consec_frames
         self.mouth_thresh = mouth_thresh
+        self.yawn_frames = yawn_frames
         self.counter = 0
+        self.yawn_counter = 0
 
     def update(self, ear, pitch, mar):
         """Feed one frame's measurements; returns the FrameStatus for that frame."""
@@ -57,4 +59,7 @@ class AlertState:
             self.counter += 1
         else:
             self.counter = 0
-        return FrameStatus(drowsy=self.counter >= self.consec_frames, yawn=mar > self.mouth_thresh)
+        # A yawn keeps the mouth wide open for a second or more; talking only for a moment.
+        self.yawn_counter = self.yawn_counter + 1 if mar > self.mouth_thresh else 0
+        return FrameStatus(drowsy=self.counter >= self.consec_frames,
+                           yawn=self.yawn_counter >= self.yawn_frames)

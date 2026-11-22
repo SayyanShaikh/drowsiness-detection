@@ -121,6 +121,7 @@ class DrowsinessDetector:
                         pitch_thresh=self.args["pitch_thresh"],
                         consec_frames=self.args["consec_frames"],
                         mouth_thresh=self.args["mouth_thresh"],
+                        yawn_frames=self.args["yawn_frames"],
                     )
                     logging.info(f"Calibration finished. Threshold set to: {self.calibrator.threshold:.2f}")
                 continue
@@ -175,6 +176,8 @@ def parse_args(argv=None):
     ap.add_argument("--calibration-frames", type=int, default=50)
     ap.add_argument("--alarm-cooldown", type=int, default=10)
     ap.add_argument("--mouth-thresh", type=float, default=0.6)
+    ap.add_argument("--yawn-frames", type=int, default=15,
+                    help="Frames in a row with the mouth wide open before a yawn is reported")
     ap.add_argument("--pitch-thresh", type=float, default=15)
     ap.add_argument("--consec-frames", type=int, default=20)
     return vars(ap.parse_args(argv))

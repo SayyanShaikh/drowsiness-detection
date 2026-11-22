@@ -58,3 +58,10 @@ def test_open_eyes_and_level_head_never_alert():
     det, faces = make_detector()
     statuses = run_frames(det, faces, 30, synthetic_landmarks())
     assert not any(s.drowsy for s in statuses) and det.spoken == []
+
+
+def test_yawn_reported_after_mouth_stays_open():
+    det, faces = make_detector(yawn_frames=3)
+    run_frames(det, faces, 5, synthetic_landmarks())
+    statuses = run_frames(det, faces, 3, synthetic_landmarks(mouth_open=110))
+    assert [s.yawn for s in statuses] == [False, False, True]
