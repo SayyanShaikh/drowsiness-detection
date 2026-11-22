@@ -1,6 +1,6 @@
-dlib
-opencv-python
-imutils
-scipy
-numpy
-pyttsx3
+dlib>=19.24
+opencv-python>=4.8
+imutils>=0.5.4
+scipy>=1.10
+numpy>=1.24
+pyttsx3>=2.90
