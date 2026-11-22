@@ -94,3 +94,37 @@ def test_calibration_counts_one_face_per_frame():
     passenger = synthetic_landmarks(scale=0.5, offset=(220, 40))
     run_frames(det, faces, 3, synthetic_landmarks(), others=[passenger])
     assert len(det.calibrator.values) == 3
+
+
+class NoFrames:
+    """A video stream that never delivers a frame (camera missing or busy)."""
+
+    def __init__(self, src=0):
+        self.stopped = False
+
+    def start(self):
+        return self
+
+    def read(self):
+        return None
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_missing_camera_stops_with_clear_message(monkeypatch):
+    monkeypatch.setattr(detect_drowsiness, "VideoStream", NoFrames)
+    monkeypatch.setattr(detect_drowsiness.time, "sleep", lambda s: None)
+    monkeypatch.setattr(detect_drowsiness.cv2, "destroyAllWindows", lambda: None)
+    det, _ = make_detector()
+    with pytest.raises(RuntimeError, match="No video from camera 0"):
+        det.run()
+
+
+def test_main_turns_errors_into_a_short_message(monkeypatch):
+    def boom(self):
+        raise RuntimeError("No video from camera 3.")
+    monkeypatch.setattr(detect_drowsiness.DrowsinessDetector, "__init__", lambda self, args: None)
+    monkeypatch.setattr(detect_drowsiness.DrowsinessDetector, "run", boom)
+    with pytest.raises(SystemExit, match="Error: No video from camera 3."):
+        detect_drowsiness.main([])
