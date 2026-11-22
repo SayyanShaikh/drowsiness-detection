@@ -32,6 +32,8 @@ def require(module_name, install_hint):
 
 
 class DrowsinessDetector:
+    MAX_EMPTY_READS = 50  # about 5 seconds without a frame -> give up with a clear message
+
     def __init__(self, args, detector=None, predictor=None):
         """`detector` and `predictor` can be passed in (e.g. fakes in tests);
         by default dlib's face detector and the 68-landmark model are loaded."""
@@ -166,11 +168,19 @@ class DrowsinessDetector:
         vs = VideoStream(src=self.args["camera"]).start()
         time.sleep(2.0)
 
+        empty_reads = 0
         try:
             while True:
                 frame = vs.read()
                 if frame is None:
+                    empty_reads += 1
+                    if empty_reads >= self.MAX_EMPTY_READS:
+                        raise RuntimeError(
+                            f"No video from camera {self.args['camera']}. Check that it is connected and not "
+                            "in use by another program, or try another index with --camera.")
+                    time.sleep(0.1)
                     continue
+                empty_reads = 0
 
                 frame, _ = self.process_frame(frame)
                 cv2.imshow("Safety System", frame)
@@ -197,6 +207,12 @@ def parse_args(argv=None):
     return vars(ap.parse_args(argv))
 
 
+def main(argv=None):
+    try:
+        DrowsinessDetector(parse_args(argv)).run()
+    except (RuntimeError, FileNotFoundError, ImportError) as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+
 if __name__ == "__main__":
-    detector_system = DrowsinessDetector(parse_args())
-    detector_system.run()
+    main()
