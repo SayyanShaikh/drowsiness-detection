@@ -17,9 +17,10 @@ import threading
 import logging
 import os
 import numpy as np
-from scipy.spatial import distance as dist
 from imutils.video import VideoStream
 from imutils import face_utils
+
+from metrics import camera_matrix, eye_aspect_ratio, head_pitch, mouth_aspect_ratio
 
 class DrowsinessDetector:
     def __init__(self, args):
@@ -45,16 +46,6 @@ class DrowsinessDetector:
         (self.rStart, self.rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
         (self.mStart, self.mEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
 
-        # --- 3D Model Points (For Head Pose) ---
-        self.model_points = np.array([
-            (0.0, 0.0, 0.0),             # Nose tip
-            (0.0, -330.0, -65.0),        # Chin
-            (-225.0, 170.0, -135.0),     # Left eye left corner
-            (225.0, 170.0, -135.0),      # Right eye right corner
-            (-150.0, -150.0, -125.0),    # Left Mouth corner
-            (150.0, -150.0, -125.0)      # Right mouth corner
-        ])
-
     def initialize_logging(self):
         logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -75,26 +66,6 @@ class DrowsinessDetector:
         logging.info(f"Loading predictor from: {path}")
         return dlib.shape_predictor(path)
 
-    @staticmethod
-    def calculate_ear(eye):
-        """Computes the Eye Aspect Ratio (EAR)."""
-        # Compute euclidean distances between the two sets of vertical eye landmarks
-        v1 = dist.euclidean(eye[1], eye[5])
-        v2 = dist.euclidean(eye[2], eye[4])
-        # Compute euclidean distance between horizontal eye landmarks
-        h = dist.euclidean(eye[0], eye[3])
-        return (v1 + v2) / (2.0 * h)
-
-    @staticmethod
-    def calculate_mar(mouth):
-        """Computes the Mouth Aspect Ratio (MAR) for yawn detection."""
-        # Vertical distances across the inner lips
-        v1 = dist.euclidean(mouth[2], mouth[10]) 
-        v2 = dist.euclidean(mouth[4], mouth[8])  
-        # Horizontal distance
-        h = dist.euclidean(mouth[0], mouth[6])  
-        return (v1 + v2) / (2.0 * h)
-
     def play_alert(self, message):
         """Triggers the TTS engine in a background thread."""
         def speak():
@@ -114,8 +85,7 @@ class DrowsinessDetector:
         vs = VideoStream(src=self.args["camera"]).start()
         time.sleep(2.0)
         
-        camera_matrix = None
-        dist_coeffs = np.zeros((4, 1))
+        cam_matrix = None
 
         try:
             while True:
@@ -126,14 +96,9 @@ class DrowsinessDetector:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 
                 # Initialize camera matrix once we know the frame dimensions
-                if camera_matrix is None:
+                if cam_matrix is None:
                     h, w = frame.shape[:2]
-                    focal_length = w
-                    camera_matrix = np.array([
-                        [focal_length, 0, w / 2],
-                        [0, focal_length, h / 2],
-                        [0, 0, 1]
-                    ], dtype="double")
+                    cam_matrix = camera_matrix(w, h)
 
                 rects = self.detector(gray, 0)
 
@@ -143,7 +108,7 @@ class DrowsinessDetector:
                     # 1. EAR Logic
                     leftEye = shape[self.lStart:self.lEnd]
                     rightEye = shape[self.rStart:self.rEnd]
-                    ear = (self.calculate_ear(leftEye) + self.calculate_ear(rightEye)) / 2.0
+                    ear = (eye_aspect_ratio(leftEye) + eye_aspect_ratio(rightEye)) / 2.0
 
                     # Calibration logic
                     if not self.calibration_done:
@@ -157,17 +122,10 @@ class DrowsinessDetector:
                         continue
 
                     # 2. MAR Logic (Yawning)
-                    mar = self.calculate_mar(shape[self.mStart:self.mEnd])
+                    mar = mouth_aspect_ratio(shape[self.mStart:self.mEnd])
 
                     # 3. Head Pose Logic (Nodding)
-                    image_points = np.array([shape[30], shape[8], shape[36], shape[45], shape[48], shape[54]], dtype="double")
-                    (_, rot_vec, trans_vec) = cv2.solvePnP(self.model_points, image_points, camera_matrix, dist_coeffs)
-                    rmat, _ = cv2.Rodrigues(rot_vec)
-                    pitch = cv2.decomposeProjectionMatrix(np.hstack((rmat, trans_vec)))[6].flatten()[0]
-                    # The 3D model's y-axis points up but image y points down, so a face looking
-                    # straight at the camera comes out near +/-180 deg. Shift it so 0 = facing the
-                    # camera and positive = head tilted down.
-                    pitch = pitch - 180 if pitch > 0 else pitch + 180
+                    pitch = head_pitch(shape, cam_matrix)
 
                     # Visual Overlays
                     for eye in [leftEye, rightEye]:
